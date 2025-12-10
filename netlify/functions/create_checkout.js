@@ -1,5 +1,5 @@
 // netlify/functions/create-checkout.js
-import Stripe from "stripe";
+const Stripe = require("stripe");
 
 export const handler = async (event, context) => {
   try {
