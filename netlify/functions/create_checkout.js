@@ -1,67 +1,83 @@
-// netlify/functions/create-checkout.js
-const Stripe = require("stripe");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-export const handler = async (event, context) => {
+exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
-    }
-
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2024-06-20"
-    });
-
-    const data = JSON.parse(event.body);
-    const { amount, currency, orderDetails } = data;
-
-    if (!amount || !currency || !orderDetails) {
       return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Missing required fields" })
+        statusCode: 405,
+        body: JSON.stringify({ error: "Method Not Allowed" }),
       };
     }
 
-    const unitAmount = Math.round(Number(amount) * 100);
+    const body = JSON.parse(event.body || "{}");
+
+    const required = [
+      "orderItemsJSON",
+      "orderSummary",
+      "orderTotal",
+      "shippingTotal",
+      "shipMethod",
+      "customerName",
+      "customerEmail",
+      "customerAddress"
+    ];
+
+    for (const key of required) {
+      if (!body[key]) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: `Missing field: ${key}` }),
+        };
+      }
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
-      customer_email: orderDetails.email || undefined,
+
       line_items: [
         {
-          quantity: 1,
           price_data: {
-            currency,
-            unit_amount: unitAmount,
+            currency: "aud",
             product_data: {
-              name: "Custom Float Frame",
-              description: orderDetails.description || "Frame Order",
+              name: "Custom Float Frame Order",
+              description: "Pinpoint Frames order"
             },
+            unit_amount: Math.round(Number(body.orderTotal) * 100),
           },
+          quantity: 1,
         },
       ],
-      shipping_address_collection: { allowed_countries: ["AU"] },
+
+      customer_email: body.customerEmail,
+
+      success_url:
+        "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
+
+      cancel_url: "https://pinpointframes.com/cancel",
+
       metadata: {
-        width: String(orderDetails.width || ""),
-        height: String(orderDetails.height || ""),
-        finish: orderDetails.finish || "",
-        delivery: orderDetails.delivery || "",
-        name: orderDetails.name || "",
-        email: orderDetails.email || "",
+        orderItemsJSON: body.orderItemsJSON,
+        orderSummary: body.orderSummary,
+        orderTotal: body.orderTotal,
+        shippingTotal: body.shippingTotal,
+        shipMethod: body.shipMethod,
+
+        customerName: body.customerName,
+        customerEmail: body.customerEmail,
+        customerPhone: body.customerPhone || "",
+        customerAddress: body.customerAddress,
       },
-      success_url: "https://pinpointframes.com/success",
-      cancel_url: "https://pinpointframes.com/order",
     });
 
     return {
       statusCode: 200,
       body: JSON.stringify({ url: session.url }),
     };
-  } catch (error) {
-    console.error("STRIPE CHECKOUT ERROR", error);
+  } catch (err) {
+    console.error("Stripe create checkout error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Checkout creation failed" }),
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };
