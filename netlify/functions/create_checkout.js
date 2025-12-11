@@ -1,87 +1,120 @@
-// netlify/functions/create_checkout.js
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+// Simple CORS headers so browser fetch() is happy
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+};
 
 exports.handler = async (event) => {
   try {
-    // Reject anything that's not POST
+    // Handle preflight
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 200, headers: CORS_HEADERS, body: "" };
+    }
+
     if (event.httpMethod !== "POST") {
       return {
         statusCode: 405,
-        body: JSON.stringify({ error: "Method Not Allowed" })
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: "Method Not Allowed" }),
       };
     }
 
-    const data = JSON.parse(event.body || "{}");
+    const body = JSON.parse(event.body || "{}");
 
-    // Basic validation
-    if (!data.order || !Array.isArray(data.order) || data.order.length === 0) {
+    const { order, customer, totals, shipMethod, state } = body;
+
+    // ---- Basic validation to avoid 400 surprises ----
+    if (!Array.isArray(order) || order.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Order is empty" })
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: "Order is empty or invalid" }),
       };
     }
 
-    if (!data.customer || !data.customer.name || !data.customer.email) {
+    if (!customer || !customer.name || !customer.email) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing customer name or email" })
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: "Missing customer name or email" }),
       };
     }
 
-    const { order, customer, totals, shipMethod, state } = data;
+    const productsTotal = Number(totals && totals.productsTotal);
+    const shippingTotal = Number(totals && totals.shippingTotal);
+    let orderTotal = Number(totals && totals.orderTotal);
 
-    // Build Stripe line items (simple single line — total only)
+    if (!isFinite(orderTotal) || orderTotal <= 0) {
+      orderTotal = productsTotal + shippingTotal;
+    }
+
+    if (!isFinite(orderTotal) || orderTotal <= 0) {
+      return {
+        statusCode: 400,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: "Invalid order total" }),
+      };
+    }
+
+    // Stripe expects amounts in cents as integers
+    const amountInCents = Math.round(orderTotal * 100);
+
+    // Single line item for the entire order
     const lineItems = [
       {
         price_data: {
           currency: "aud",
           product_data: {
-            name: "Pinpoint Frames Order",
-            description: `Frames (${order.length} items)`
+            name: "Pinpoint Frames order",
           },
-          unit_amount: Math.round((totals?.orderTotal || 0) * 100), // cents
+          unit_amount: amountInCents,
         },
-        quantity: 1
-      }
+        quantity: 1,
+      },
     ];
 
-    // Create Checkout Session
+    // Metadata for your reference in Stripe dashboard
+    const metadata = {
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerNotes: customer.notes || "",
+      shipMethod: shipMethod || "",
+      state: state || "",
+      productsTotal: isFinite(productsTotal)
+        ? productsTotal.toFixed(2)
+        : "",
+      shippingTotal: isFinite(shippingTotal)
+        ? shippingTotal.toFixed(2)
+        : "",
+      // keep under Stripe metadata size limits
+      orderJSON: JSON.stringify(order).slice(0, 5000),
+    };
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       line_items: lineItems,
-
-      success_url: "https://pinpointframes.com/success?session_id={CHECKOUT_SESSION_ID}",
+      success_url:
+        "https://pinpointframes.com/success?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://pinpointframes.com/cancel",
-
       customer_email: customer.email,
-
-      metadata: {
-        customer_name: customer.name || "",
-        customer_notes: customer.notes || "",
-        ship_method: shipMethod || "",
-        state: state || "",
-        products_total: String(totals?.productsTotal || "0"),
-        shipping_total: String(totals?.shippingTotal || "0"),
-        order_total: String(totals?.orderTotal || "0"),
-        order_json: JSON.stringify(order)
-      }
+      metadata,
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ url: session.url })
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ url: session.url }),
     };
-
   } catch (err) {
-    console.error("Stripe Checkout Error:", err);
-
+    console.error("Stripe create checkout error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: "Server error creating checkout",
-        details: err.message
-      })
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };
