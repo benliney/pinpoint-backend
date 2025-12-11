@@ -1,59 +1,67 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 exports.handler = async (event) => {
+  // ------------------------------
+  // CORS PRE-FLIGHT HANDLING
+  // ------------------------------
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+      },
+      body: ""
+    };
+  }
+
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ error: "Method Not Allowed" })
+    };
+  }
+
   try {
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        body: JSON.stringify({ error: "Method Not Allowed" }),
-      };
-    }
-
-    const body = JSON.parse(event.body || "{}");
-    const sessionId = body.session_id;
-
-    if (!sessionId) {
+    const { session_id } = JSON.parse(event.body || "{}");
+    if (!session_id) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing session_id" }),
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ success: false, error: "Missing session_id" })
       };
     }
 
-    // Retrieve checkout session including expanded line items & customer details
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    // Fetch the Stripe Checkout Session
+    const session = await stripe.checkout.sessions.retrieve(session_id, {
       expand: ["line_items", "customer_details"],
     });
 
-    // Build response with ALL useful data for your success page
-    const response = {
-      success: true,
-
-      payment_status: session.payment_status,
-      amount_total: session.amount_total,
-      currency: session.currency,
-
-      customer: {
-        name: session.customer_details?.name || "",
-        email: session.customer_details?.email || "",
-        phone: session.customer_details?.phone || "",
-        address: session.customer_details?.address || {},
-      },
-
-      line_items: session.line_items?.data || [],
-
-      metadata: session.metadata || {},
-    };
-
     return {
       statusCode: 200,
-      body: JSON.stringify(response),
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        success: true,
+        amount_total: session.amount_total,
+        payment_status: session.payment_status,
+        metadata: session.metadata,
+        customer: session.customer_details,
+        line_items: session.line_items?.data || []
+      })
     };
+
   } catch (err) {
-    console.error("Error fetching session:", err);
+    console.error("get_session ERROR:", err);
+
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message }),
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        success: false,
+        error: err.message
+      })
     };
   }
 };
-
