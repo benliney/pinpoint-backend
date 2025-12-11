@@ -97,8 +97,7 @@ exports.handler = async (event) => {
       mode: "payment",
       payment_method_types: ["card"],
       line_items: lineItems,
-      success_url:
-        "https://pinpointframes.com/success?session_id={CHECKOUT_SESSION_ID}",
+     success_url: "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://pinpointframes.com/cancel",
       customer_email: customer.email,
       metadata,
