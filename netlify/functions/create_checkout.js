@@ -100,7 +100,9 @@ exports.handler = async (event) => {
      success_url: "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://pinpointframes.com/cancel",
       customer_email: customer.email,
-      metadata,
+      metadata: {
+  orderSummary: payload.orderSummary
+}
     });
 
     return {
