@@ -78,6 +78,7 @@ exports.handler = async (event) => {
 
     // Metadata for your reference in Stripe dashboard
     const metadata = {
+      orderRef: body.orderRef,
       customerName: customer.name,
       customerEmail: customer.email,
       customerNotes: customer.notes || "",
