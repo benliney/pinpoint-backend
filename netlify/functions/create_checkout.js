@@ -89,6 +89,7 @@ exports.handler = async (event) => {
       shippingTotal: isFinite(shippingTotal)
         ? shippingTotal.toFixed(2)
         : "",
+      orderSummary: body.orderSummary || "",
       // keep under Stripe metadata size limits
       orderJSON: JSON.stringify(order).slice(0, 5000),
     };
@@ -100,9 +101,7 @@ exports.handler = async (event) => {
      success_url: "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://pinpointframes.com/cancel",
       customer_email: customer.email,
-      metadata: {
-  orderSummary: payload.orderSummary
-}
+metadata,
     });
 
     return {
