@@ -93,15 +93,30 @@ exports.handler = async (event) => {
       orderJSON: JSON.stringify(order).slice(0, 5000),
     };
 
+    // Determine if shipping address is needed
+const isDelivery = shipMethod === "courier";
+
+// Conditionally include shipping address collection
+const shippingConfig = isDelivery
+  ? {
+      shipping_address_collection: {
+        allowed_countries: ["AU"],
+      },
+    }
+  : {};
+
     const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: lineItems,
-     success_url: "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://pinpointframes.com/cancel",
-      customer_email: customer.email,
-      metadata,
-    });
+  mode: "payment",
+  payment_method_types: ["card"],
+  line_items: lineItems,
+  success_url: "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
+  cancel_url: "https://pinpointframes.com/cancel",
+  customer_email: customer.email,
+  metadata,
+
+  // 👇 This spreads in shipping only when needed
+  ...shippingConfig,
+});
 
     return {
       statusCode: 200,
