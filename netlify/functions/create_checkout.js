@@ -117,7 +117,7 @@ const shippingConfig = isDelivery
   metadata,
 
   // 👇 This spreads in shipping only when needed
-  ...shippingConfig,
+  ...shippingConfig
 });
 
       mode: "payment",
