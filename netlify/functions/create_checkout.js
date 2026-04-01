@@ -106,17 +106,6 @@ const shippingConfig = isDelivery
     }
   : {};
 
-// Determine if shipping address is needed
-const isDelivery = shipMethod === "courier";
-
-const shippingConfig = isDelivery
-  ? {
-      shipping_address_collection: {
-        allowed_countries: ["AU"],
-      },
-    }
-  : {};
-
 const session = await stripe.checkout.sessions.create({
   mode: "payment",
   payment_method_types: ["card"],
