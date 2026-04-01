@@ -78,6 +78,7 @@ exports.handler = async (event) => {
 
     // Metadata for your reference in Stripe dashboard
     const metadata = {
+      orderRef: body.orderRef,
       customerName: customer.name,
       customerEmail: customer.email,
       customerNotes: customer.notes || "",
@@ -89,6 +90,7 @@ exports.handler = async (event) => {
       shippingTotal: isFinite(shippingTotal)
         ? shippingTotal.toFixed(2)
         : "",
+      orderSummary: body.orderSummary || "",
       // keep under Stripe metadata size limits
       orderJSON: JSON.stringify(order).slice(0, 5000),
     };
@@ -106,6 +108,7 @@ const shippingConfig = isDelivery
   : {};
 
     const session = await stripe.checkout.sessions.create({
+<<<<<<< HEAD
   mode: "payment",
   payment_method_types: ["card"],
   line_items: lineItems,
@@ -117,6 +120,16 @@ const shippingConfig = isDelivery
   // 👇 This spreads in shipping only when needed
   ...shippingConfig,
 });
+=======
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: lineItems,
+  success_url: "https://pinpointframes.com/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://pinpointframes.com/cancel",
+      customer_email: customer.email,
+metadata,
+    });
+>>>>>>> 0494168ab4840b60d2f37806b0d05c5e90a40c6b
 
     return {
       statusCode: 200,
