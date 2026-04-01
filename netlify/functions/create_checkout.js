@@ -96,7 +96,7 @@ exports.handler = async (event) => {
     };
 
 // Determine if shipping address is needed
-const isDelivery = shipMethod === "courier";
+const isDelivery = shipMethod === "shipping";
 
 const shippingConfig = isDelivery
   ? {
