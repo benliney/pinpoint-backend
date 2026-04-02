@@ -110,7 +110,7 @@ const session = await stripe.checkout.sessions.create({
   mode: "payment",
   payment_method_types: ["card"],
   line_items: lineItems,
-  success_url: "https://pinpointframes.com/chk?session_id={CHECKOUT_SESSION_ID}",
+  success_url: "https://pinpointframes.com/success",
   cancel_url: "https://pinpointframes.com/cancel",
   customer_email: customer.email,
   metadata,
