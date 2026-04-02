@@ -77,23 +77,28 @@ exports.handler = async (event) => {
     ];
 
     // Metadata for your reference in Stripe dashboard
-    const metadata = {
-      orderRef: body.orderRef,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      customerNotes: customer.notes || "",
-      shipMethod: shipMethod || "",
-      state: state || "",
-      productsTotal: isFinite(productsTotal)
-        ? productsTotal.toFixed(2)
-        : "",
-      shippingTotal: isFinite(shippingTotal)
-        ? shippingTotal.toFixed(2)
-        : "",
-      orderSummary: body.orderSummary || "",
-      // keep under Stripe metadata size limits
-      orderJSON: JSON.stringify(order).slice(0, 5000),
-    };
+const metadata = {
+  customerName: customer.name || "",
+  customerEmail: customer.email || "",
+  shipMethod: shipMethod || "",
+  state: state || "",
+
+  // Totals
+  orderTotal: orderTotal.toFixed(2),
+  productsTotal: isFinite(productsTotal) ? productsTotal.toFixed(2) : "",
+  shippingTotal: isFinite(shippingTotal) ? shippingTotal.toFixed(2) : "",
+
+  // 🔥 Key order summary (human readable)
+  orderSummary: order
+    .map(item => {
+      return `${item.width}x${item.height} ${item.finish} x${item.qty}`;
+    })
+    .join(" | ")
+    .slice(0, 500),
+
+  // 🔥 Backup full data (compressed)
+  orderJSON: JSON.stringify(order).slice(0, 500)
+};
 
 // Determine if shipping address is needed
 const isDelivery = shipMethod === "shipping";
