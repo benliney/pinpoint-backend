@@ -80,6 +80,7 @@ exports.handler = async (event) => {
 const metadata = {
   customerName: customer.name || "",
   customerEmail: customer.email || "",
+  customerNotes: customer.notes || "",
   shipMethod: shipMethod || "",
   state: state || "",
 
