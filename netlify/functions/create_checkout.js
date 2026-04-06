@@ -60,25 +60,28 @@ exports.handler = async (event) => {
     }
 
     // ✅ STORE IN AIRTABLE (NOW IN RIGHT PLACE)
-    await fetch(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Orders`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.AIRTABLE_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        fields: {
-          orderRef: body.orderRef,
-          status: "pending",
-          customerName: customer.name || "",
-          customerEmail: customer.email || "",
-          customerNotes: customer.notes || "",
-          orderJSON: JSON.stringify(order), // ✅ full safe storage
-          orderTotal: orderTotal
-        }
-      })
-    });
+   const airtableRes = await fetch(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Orders`, {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.AIRTABLE_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    fields: {
+      orderRef: body.orderRef,
+      status: "pending",
+      customerName: customer.name || "",
+      customerEmail: customer.email || "",
+      customerNotes: customer.notes || "",
+      orderJSON: JSON.stringify(order),
+      orderTotal: orderTotal
+    }
+  })
+});
 
+const airtableData = await airtableRes.text();
+console.log("Airtable status:", airtableRes.status);
+console.log("Airtable response:", airtableData);
     const amountInCents = Math.round(orderTotal * 100);
 
     const lineItems = [
