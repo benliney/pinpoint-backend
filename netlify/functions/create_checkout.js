@@ -1,29 +1,6 @@
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const AIRTABLE_TABLE = "Orders";
-
-await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE}`, {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    fields: {
-      orderRef: body.orderRef,
-      status: "pending",
-      customerName: body.customer?.name || "",
-      customerEmail: body.customer?.email || "",
-      customerNotes: body.customer?.notes || "",
-      orderJSON: JSON.stringify(body.order), // full order stored safely here
-      orderTotal: body.totals?.orderTotal || 0
-    }
-  })
-});
-
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// Simple CORS headers so browser fetch() is happy
+// Simple CORS headers
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
@@ -32,7 +9,8 @@ const CORS_HEADERS = {
 
 exports.handler = async (event) => {
   try {
-    // Handle preflight
+    console.log("FUNCTION HIT");
+
     if (event.httpMethod === "OPTIONS") {
       return { statusCode: 200, headers: CORS_HEADERS, body: "" };
     }
@@ -49,7 +27,6 @@ exports.handler = async (event) => {
 
     const { order, customer, totals, shipMethod, state } = body;
 
-    // ---- Basic validation to avoid 400 surprises ----
     if (!Array.isArray(order) || order.length === 0) {
       return {
         statusCode: 400,
@@ -82,10 +59,28 @@ exports.handler = async (event) => {
       };
     }
 
-    // Stripe expects amounts in cents as integers
+    // ✅ STORE IN AIRTABLE (NOW IN RIGHT PLACE)
+    await fetch(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Orders`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.AIRTABLE_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        fields: {
+          orderRef: body.orderRef,
+          status: "pending",
+          customerName: customer.name || "",
+          customerEmail: customer.email || "",
+          customerNotes: customer.notes || "",
+          orderJSON: JSON.stringify(order), // ✅ full safe storage
+          orderTotal: orderTotal
+        }
+      })
+    });
+
     const amountInCents = Math.round(orderTotal * 100);
 
-    // Single line item for the entire order
     const lineItems = [
       {
         price_data: {
@@ -99,59 +94,51 @@ exports.handler = async (event) => {
       },
     ];
 
-    // Metadata for your reference in Stripe dashboard
-const metadata = {
-  orderRef: body.orderRef || "",
-  customerName: customer.name || "",
-  customerEmail: customer.email || "",
-  customerNotes: customer.notes || "",
-  shipMethod: shipMethod || "",
-  state: state || "",
+    const metadata = {
+      orderRef: body.orderRef || "",
+      customerName: customer.name || "",
+      customerEmail: customer.email || "",
+      customerNotes: customer.notes || "",
+      shipMethod: shipMethod || "",
+      state: state || "",
 
-  // Totals
-  orderTotal: orderTotal.toFixed(2),
-  productsTotal: isFinite(productsTotal) ? productsTotal.toFixed(2) : "",
-  shippingTotal: isFinite(shippingTotal) ? shippingTotal.toFixed(2) : "",
+      orderTotal: orderTotal.toFixed(2),
+      productsTotal: isFinite(productsTotal) ? productsTotal.toFixed(2) : "",
+      shippingTotal: isFinite(shippingTotal) ? shippingTotal.toFixed(2) : "",
 
-  // 🔥 Key order summary (human readable)
-  orderSummary: order
-    .map(item => {
-      return `${item.width}x${item.height} ${item.finish} x${item.qty}`;
-    })
-    .join(" | ")
-    .slice(0, 500),
+      orderSummary: order
+        .map(item => `${item.width}x${item.height} ${item.finish} x${item.qty}`)
+        .join(" | ")
+        .slice(0, 500)
+    };
 
-  // 🔥 Backup full data (compressed)
-  orderJSON: JSON.stringify(order).slice(0, 500)
-};
+    const isDelivery = shipMethod === "shipping";
 
-// Determine if shipping address is needed
-const isDelivery = shipMethod === "shipping";
+    const shippingConfig = isDelivery
+      ? {
+          shipping_address_collection: {
+            allowed_countries: ["AU"],
+          },
+        }
+      : {};
 
-const shippingConfig = isDelivery
-  ? {
-      shipping_address_collection: {
-        allowed_countries: ["AU"],
-      },
-    }
-  : {};
-
-const session = await stripe.checkout.sessions.create({
-  mode: "payment",
-  payment_method_types: ["card"],
-  line_items: lineItems,
-  success_url: "https://pinpointframes.com/success",
-  cancel_url: "https://pinpointframes.com/cancel",
-  customer_email: customer.email,
-  metadata,
-  ...shippingConfig
-});
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      success_url: "https://pinpointframes.com/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://pinpointframes.com/cancel",
+      customer_email: customer.email,
+      metadata,
+      ...shippingConfig
+    });
 
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
       body: JSON.stringify({ url: session.url }),
     };
+
   } catch (err) {
     console.error("Stripe create checkout error:", err);
     return {
