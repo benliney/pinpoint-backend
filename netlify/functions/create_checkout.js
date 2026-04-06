@@ -1,3 +1,26 @@
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_TABLE = "Orders";
+
+await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE}`, {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    fields: {
+      orderRef: body.orderRef,
+      status: "pending",
+      customerName: body.customer?.name || "",
+      customerEmail: body.customer?.email || "",
+      customerNotes: body.customer?.notes || "",
+      orderJSON: JSON.stringify(body.order), // full order stored safely here
+      orderTotal: body.totals?.orderTotal || 0
+    }
+  })
+});
+
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // Simple CORS headers so browser fetch() is happy
