@@ -43,9 +43,9 @@ exports.handler = async (event) => {
       };
     }
 
-    const productsTotal = Number(totals && totals.productsTotal);
-    const shippingTotal = Number(totals && totals.shippingTotal);
-    let orderTotal = Number(totals && totals.orderTotal);
+const productsTotal = Number(totals?.productsTotal) || 0;
+const shippingTotal = Number(totals?.shippingTotal) || 0;
+let orderTotal = Number(totals?.orderTotal) || 0;
 
     if (!isFinite(orderTotal) || orderTotal <= 0) {
       orderTotal = productsTotal + shippingTotal;
@@ -59,29 +59,61 @@ exports.handler = async (event) => {
       };
     }
 
-    // ✅ STORE IN AIRTABLE (NOW IN RIGHT PLACE)
-   const airtableRes = await fetch(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Orders`, {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${process.env.AIRTABLE_API_KEY}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    fields: {
-      orderRef: body.orderRef,
-      status: "pending",
-      customerName: customer.name || "",
-      customerEmail: customer.email || "",
-      customerNotes: customer.notes || "",
-      orderJSON: JSON.stringify(order),
-      orderTotal: orderTotal
-    }
-  })
-});
+    // ✅ Validate orderRef before proceeding
+if (!body.orderRef) {
+  return {
+    statusCode: 400,
+    headers: CORS_HEADERS,
+    body: JSON.stringify({ error: "Missing orderRef" }),
+  };
+}
 
+// ✅ STORE IN AIRTABLE
+const airtableRes = await fetch(
+  `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Orders`,
+  {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.AIRTABLE_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      fields: {
+        orderRef: body.orderRef,
+        status: "pending",
+
+        customerName: customer.name || "",
+        customerEmail: customer.email || "",
+        customerNotes: customer.notes || "",
+
+        shippingMethod: (shipMethod || "pickup").toLowerCase(),
+        shippingTotal: Number(shippingTotal) || 0,
+
+        orderJSON: JSON.stringify(order),
+
+        orderTotal: Number(orderTotal) || 0
+      }
+    })
+  }
+);
+
+// ✅ Handle Airtable response safely
 const airtableData = await airtableRes.text();
+
 console.log("Airtable status:", airtableRes.status);
 console.log("Airtable response:", airtableData);
+
+if (!airtableRes.ok) {
+  return {
+    statusCode: 500,
+    headers: CORS_HEADERS,
+    body: JSON.stringify({ error: "Failed to create order in Airtable" }),
+  };
+}
+
+
+
+
     const amountInCents = Math.round(orderTotal * 100);
 
     const lineItems = [
@@ -97,23 +129,11 @@ console.log("Airtable response:", airtableData);
       },
     ];
 
-    const metadata = {
-      orderRef: body.orderRef || "",
-      customerName: customer.name || "",
-      customerEmail: customer.email || "",
-      customerNotes: customer.notes || "",
-      shipMethod: shipMethod || "",
-      state: state || "",
-
-      orderTotal: orderTotal.toFixed(2),
-      productsTotal: isFinite(productsTotal) ? productsTotal.toFixed(2) : "",
-      shippingTotal: isFinite(shippingTotal) ? shippingTotal.toFixed(2) : "",
-
-      orderSummary: order
-        .map(item => `${item.width}x${item.height} ${item.finish} x${item.qty}`)
-        .join(" | ")
-        .slice(0, 500)
-    };
+   const metadata = {
+  orderRef: body.orderRef || "",
+  shipMethod: shipMethod || "",
+  shippingTotal: isFinite(shippingTotal) ? shippingTotal.toFixed(2) : "0"
+};
 
     const isDelivery = shipMethod === "shipping";
 
